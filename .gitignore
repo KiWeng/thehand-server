@@ -1,1 +1,11 @@
+# Exclude vscode config files
+.vscode
 .idea
+
+# Exclude .DS_Store files from being added
+.DS_Store
+
+tmp
+
+assests/saved_model
+assests/example_data
