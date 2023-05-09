@@ -11,8 +11,8 @@ from models.train import train
 
 from models import generate_dataset
 
-data_root = Path('../assests/emg_20221112')
-info_file = pd.read_csv(data_root / 'assests-info.csv')
+data_root = Path('../assets/emg_20221112')
+info_file = pd.read_csv(data_root / 'assets-info.csv')
 data_path = data_root / 'cropped'
 checkpoint_path = f"../checkpoints/{config['model_name']}-all"
 
@@ -131,7 +131,7 @@ for i in new_subject:
         post_results1 = model.predict(val1_dataset, use_multiprocessing=True, workers=12)
 
         fig, axs = plt.subplots(3)
-        fig.suptitle(f'Prediction on validation assests 1 for test {i}')
+        fig.suptitle(f'Prediction on validation assets 1 for test {i}')
         fig.set_size_inches(15 / 5400 * pre_results1.shape[0], 15)
         axs[0].set_ylim(-1, 17)
         axs[0].plot(val1_label.reshape((-1, 5)), linewidth=0.6)
@@ -169,7 +169,7 @@ for i in [8]:
 # %%
 for i in range(30):
     row = info_file.iloc[i]
-    data_path = Path('../assests/emg_20221112')
+    data_path = Path('../assets/emg_20221112')
     name = row['name']
     date = datetime.strptime(row['time'], "%Y/%m/%d %H:%M").strftime('%Y-%m-%d')
     event_file = [event_file for event_file in (data_path / 'raw').glob(f'{name}*{date}*events*')]

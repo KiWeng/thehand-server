@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def load_model(model_path='../assests/saved_model/base'):
+def load_model(model_path='../assets/saved_model/base'):
     return tf.keras.models.load_model(model_path)
 
 

@@ -7,5 +7,6 @@
 
 tmp
 
-assests/saved_model
-assests/example_data
+*.csv
+/assets/saved_model/
+/assets/example_data/

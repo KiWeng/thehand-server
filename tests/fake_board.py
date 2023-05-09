@@ -22,11 +22,11 @@ class FakeBoard:
         self.buffer_cleaned_time = self.init_time_ns
 
     def get_current_board_data(self, num_samples: int) -> ndarray:
-        """Get specified amount of assests or less if there is not enough assests
+        """Get specified amount of assets or less if there is not enough assets
 
         :param num_samples: max number of samples
         :type num_samples: int
-        :return: latest assests from a board
+        :return: latest assets from a board
         :rtype: ndarray
         """
         if self.check_time:
@@ -47,7 +47,7 @@ class FakeBoard:
 
         :param num_samples: max number of samples
         :type num_samples: int
-        :return: latest assests from a board
+        :return: latest assets from a board
         :rtype: ndarray
         """
 

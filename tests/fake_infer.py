@@ -1,8 +1,7 @@
-import time
 import numpy as np
 
-from models import load_model
 from fake_board import FakeBoard
+from models import load_model
 
 if __name__ == "__main__":
     board = FakeBoard()
