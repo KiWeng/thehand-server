@@ -1,15 +1,17 @@
 import asyncio
 import logging
+import time
 from random import random
 
 import numpy as np
 from aiohttp import web
 
 from models.infer import load_model
-from tests.fake_board import FakeBoard
+from utils import load_board
 
 log = logging.getLogger(__name__)
-board = FakeBoard()
+
+board = load_board(fake=False)
 model = load_model()
 
 
@@ -21,10 +23,18 @@ async def infer(request):
 
     await ws_current.send_json({'action': 'connect', 'id': model_id})
 
+    prev_time = time.time_ns()
+
     try:
         while True:
-            if board.get_board_data_count() < 8 * 800:
-                continue
+            # too slow in test
+            # if board.get_board_data_count() < 8 * 800:
+            #     continue
+
+            current_time = time.time_ns()
+            print(f"{((current_time - prev_time) / 1e6)} start")
+            prev_time = current_time
+
             fake_data = board.get_current_board_data(8 * 800)[:12, ::8]
             fake_data = fake_data[:, -800:]
             fake_data = np.expand_dims(fake_data.T, axis=0)
@@ -58,7 +68,7 @@ async def infer_fake(request):
             This is only a workaround, see p552 in Fluent Python (chinese) for detailed information
             '''
             await ws_current.send_json(
-                {'action'    : 'sent', 'prediction': [
+                {'action': 'sent', 'prediction': [
                     [random() * 15, random() * 15, random() * 15, random() * 15, random() * 15]]}
             )
     except OSError:
@@ -93,7 +103,8 @@ async def init_app():
     app.on_shutdown.append(shutdown)
 
     app.add_routes([
-        web.get('/infer/{id}', infer_fake),
+        # web.get('/infer/{id}', infer_fake),
+        web.get('/infer/{id}', infer),
         web.get('/', recording)
     ])
 
