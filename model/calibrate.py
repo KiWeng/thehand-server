@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from models.covn_transformer_spectro_01 import config, get_model
-from models.train import train
+from model.covn_transformer_spectro_01 import config, get_model
+from model.train import train
 
-from models import generate_dataset
+from model import generate_dataset
 
 data_root = Path('../assets/emg_20221112')
 info_file = pd.read_csv(data_root / 'assets-info.csv')

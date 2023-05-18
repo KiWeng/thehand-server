@@ -156,21 +156,6 @@ tests = ["attrs[tests-no-zope]", "zope-interface"]
 tests-no-zope = ["cloudpickle", "hypothesis", "mypy (>=1.1.1)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "pytest-xdist[psutil]"]
 
 [[package]]
-name = "brainflow"
-version = "5.7.0"
-description = "Python Binding for BrainFlow"
-category = "main"
-optional = false
-python-versions = ">=3.5.6"
-files = [
-    {file = "brainflow-5.7.0-py3-none-any.whl", hash = "sha256:9bdb5137b7e2bfbb7c461448b56a66336cf6daca926042041a054b0d4372c3ba"},
-]
-
-[package.dependencies]
-nptyping = "1.4.4"
-numpy = "*"
-
-[[package]]
 name = "charset-normalizer"
 version = "3.1.0"
 description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
@@ -490,24 +475,6 @@ files = [
 ]
 
 [[package]]
-name = "nptyping"
-version = "1.4.4"
-description = "Type hints for Numpy."
-category = "main"
-optional = false
-python-versions = ">=3.5"
-files = [
-    {file = "nptyping-1.4.4-py3-none-any.whl", hash = "sha256:8128473b8ba0e65f3d6edc727cd99024e162edcf7e8a0ea8f9dfa6b070934d14"},
-]
-
-[package.dependencies]
-numpy = "*"
-typish = ">=1.7.0"
-
-[package.extras]
-test = ["autoflake", "codecov", "coverage", "isort", "pycodestyle", "pylint", "pytest", "radon", "scons", "xenon"]
-
-[[package]]
 name = "numpy"
 version = "1.24.3"
 description = "Fundamental package for array computing in Python"
@@ -649,20 +616,6 @@ files = [
     {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
 ]
-
-[[package]]
-name = "typish"
-version = "1.9.3"
-description = "Functionality for types"
-category = "main"
-optional = false
-python-versions = "*"
-files = [
-    {file = "typish-1.9.3-py3-none-any.whl", hash = "sha256:03cfee5e6eb856dbf90244e18f4e4c41044c8790d5779f4e775f63f982e2f896"},
-]
-
-[package.extras]
-test = ["codecov", "coverage", "mypy", "nptyping (>=1.3.0)", "numpy", "pycodestyle", "pylint", "pytest"]
 
 [[package]]
 name = "websockets"
@@ -835,4 +788,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "ef943482a5f797fdde7b81ce44416cce2808698a837cda712cf3b7b63d90ccef"
+content-hash = "2a849790813d3610e4739bee181830925b1f37f2c74760f3f406451119ea65dc"

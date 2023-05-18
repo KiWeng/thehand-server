@@ -1,18 +1,18 @@
 import asyncio
 import logging
-import time
 from random import random
 
 import numpy as np
 from aiohttp import web
 
-from models.infer import load_model
-from utils import load_board
+from model.infer import EMGModel
+from utils import load_board, DotTimer
 
 log = logging.getLogger(__name__)
 
 board = load_board(fake=False)
-model = load_model()
+model = EMGModel()
+dt = DotTimer()
 
 
 async def infer(request):
@@ -21,9 +21,13 @@ async def infer(request):
     await ws_current.prepare(request)
     log.info(f"requesting model {model_id}")
 
-    await ws_current.send_json({'action': 'connect', 'id': model_id})
+    def step(device):
+        data = device.get_current_board_data(8 * 800)[:12, ::8]
+        data = data[:, -800:]
+        data = np.expand_dims(data.T, axis=0)
+        return model.predict(data)
 
-    prev_time = time.time_ns()
+    await ws_current.send_json({'action': 'connect', 'id': model_id})
 
     try:
         while True:
@@ -31,22 +35,16 @@ async def infer(request):
             # if board.get_board_data_count() < 8 * 800:
             #     continue
 
-            current_time = time.time_ns()
-            print(f"{((current_time - prev_time) / 1e6)} start")
-            prev_time = current_time
-
-            fake_data = board.get_current_board_data(8 * 800)[:12, ::8]
-            fake_data = fake_data[:, -800:]
-            fake_data = np.expand_dims(fake_data.T, axis=0)
-
-            prediction = model.predict(fake_data)
+            # elegant, but slower, fuck
+            # prediction = await asyncio.to_thread(infer_step, board)
+            prediction = step(board)
             await asyncio.sleep(0)
-            ''' TODO:
-            This is only a workaround, see p552 in Fluent Python (chinese) for detailed information
-            '''
             await ws_current.send_json(
                 {'action': 'sent', 'prediction': prediction.tolist()}
             )
+            dt.dot()
+            print(f'{dt.avg}--time elapsed')
+
     except OSError:
         log.info(f"stop inferring model {model_id}")
 
@@ -64,9 +62,6 @@ async def infer_fake(request):
     try:
         while True:
             await asyncio.sleep(0.1)
-            ''' TODO:
-            This is only a workaround, see p552 in Fluent Python (chinese) for detailed information
-            '''
             await ws_current.send_json(
                 {'action': 'sent', 'prediction': [
                     [random() * 15, random() * 15, random() * 15, random() * 15, random() * 15]]}
@@ -114,10 +109,7 @@ async def init_app():
 
 
 async def shutdown(app):
-    await app.ws.close()
-
-
-async def shutdown(app):
+    # TODO
     for ws in app['websockets'].values():
         await ws.close()
     app['websockets'].clear()

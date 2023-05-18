@@ -1,11 +1,11 @@
 import numpy as np
 
 from fake_board import FakeBoard
-from models import load_model
+from model import EMGModel
 
 if __name__ == "__main__":
     board = FakeBoard()
-    model = load_model()
+    model = EMGModel()
     while True:
         if board.get_board_data_count() < 8 * 800:
             continue

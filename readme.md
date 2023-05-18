@@ -2,6 +2,8 @@
 
 Server side for the hand project, communicate with the web UI using websockets and web requests.
 
+Manually install timeflux_eego is needed. Installation requires PyBind11&msvc
+
 ## TODOs
 
 ### Basics

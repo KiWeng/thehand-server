@@ -8,7 +8,6 @@ packages = [{include = "thehand_server", from = "server"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-brainflow = "^5.7.0"
 websockets = "^11.0.2"
 pytest = "^7.3.1"
 pyqtgraph = "^0.13.3"
