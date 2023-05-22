@@ -13,10 +13,12 @@ class EegoDriver:
                  bipolar_channels=None,
                  bipolar_range=4,
                  amplifier_index=0,
+                 buffer_size=10000,
                  ):
         super().__init__()
         self._factory = eego.glue.factory(eego.sdk.default_dll(), None)
         self._amplifier = None
+        self.buffer_size = buffer_size
 
         retries = 3
         while retries > 0:
@@ -58,6 +60,8 @@ class EegoDriver:
         self._sample_count = None
         self.eeg_data = None
         self.bip_data = None
+        self.eeg_data_buffer = None
+        self.bip_data_buffer = None
 
         print('Eeego amplifier connected %s' % self._amplifier)
 
@@ -124,21 +128,39 @@ class EegoDriver:
             np.arange(len(self._bip_config.channels)) + len(self._ref_config.channels), [-2, -1]]
         self.bip_data = data[:, bip_col_idx]
 
+        if self.eeg_data_buffer is None:
+            self.eeg_data_buffer = self.eeg_data
+        else:
+            self.eeg_data_buffer = np.concatenate((self.eeg_data_buffer, self.eeg_data), axis=0)
+            self.eeg_data_buffer = self.eeg_data_buffer[-self.buffer_size:, :]
+
+        if self.bip_data_buffer is None:
+            self.bip_data_buffer = self.bip_data
+        else:
+            self.bip_data_buffer = np.concatenate((self.bip_data_buffer, self.bip_data), axis=0)
+            self.bip_data_buffer = self.bip_data_buffer[-self.buffer_size:, :]
         return self.eeg_data, self.bip_data
+
+    def get_data_of_size(self, size):
+        self.get_data()
+        if size > self.buffer_size:
+            raise Exception
+        current_len = self.eeg_data_buffer.shape[0]
+        if current_len < size:
+            size = current_len
+
+        return self.eeg_data_buffer[-size:, :], self.bip_data_buffer[-size:, :]
 
 
 if __name__ == "__main__":
     dri = EegoDriver()
-    dri.get_data()
-    bip_data = dri.bip_data
-    while bip_data is None:
-        dri.get_data()
-        bip_data = dri.bip_data
-    print(bip_data.shape)
-    print(bip_data)
 
-    time.sleep(1)
-    dri.get_data()
-    bip_data = dri.bip_data
-    print(bip_data.shape)  # (2032, 26), for sampling rate@2000hz
-    print(bip_data)
+    while True:
+        try:
+            bip_data = dri.get_data_of_size(800)[1]
+        except Exception as e:
+            print(e)
+        else:
+            print(bip_data.shape)
+        finally:
+            time.sleep(0.2)

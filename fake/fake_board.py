@@ -20,12 +20,11 @@ class FakeBoard:
         self.check_time = True
         self.init_time_ns = time.time_ns()
         self.buffer_cleaned_time = self.init_time_ns
-        data = np.genfromtxt("../assets/example_data/李存波_2022-11-12_emg_noabs.csv",
-                             delimiter=",")
-        mean = data.mean()
-        std = data.std()
-        print((mean, std))
-        self.data = ((data - mean) / std)
+        # data = np.genfromtxt("../assets/example_data/李存波_2022-11-12_emg_noabs.csv",
+        #                      delimiter=",")
+        self.data = np.genfromtxt(
+            r"C:\Users\kwzh\PythonProjects\thehand-server\tmp\bipolar_recording_1684499974.8314939.csv",
+            delimiter=" ")[:, :12]
 
     def get_current_board_data(self, num_samples: int) -> ndarray:
         """Get specified amount of assets or less if there is not enough assets

@@ -1,6 +1,6 @@
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
 
-from tests.fake_board import FakeBoard
+from fake.fake_board import FakeBoard
 
 
 def load_board(fake, port="Port_#0002.Hub_#0002"):
