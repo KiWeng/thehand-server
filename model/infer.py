@@ -3,7 +3,7 @@ import tensorflow as tf
 
 
 class EMGModel:
-    def __init__(self, model_path='../assets/saved_model/base'):
+    def __init__(self, model_path='../assets/saved_model/finetuned'):
         self.model = tf.keras.models.load_model(model_path)
 
     def predict(self, data):
