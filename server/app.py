@@ -6,10 +6,10 @@ import numpy as np
 from aiohttp import web
 from mne import filter
 
-from utils import EegoDriver
 # from fake import EegoDriver
 from model.infer import EMGModel
 from utils import DotTimer
+from utils import EegoDriver
 
 log = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ async def infer(request):
     await ws_current.prepare(request)
     log.info(f"requesting model {model_id}")
 
-    sample_len = 6000
+    sample_len = 2000
 
     def step(driver):
         data = driver.get_data_of_size(sample_len)
@@ -103,12 +103,13 @@ async def infer(request):
             bipolar_data = data[1]
 
         filtered = filter.notch_filter((bipolar_data[:, :12] / stds).T, sample_frequency, freqs,
+                                       filter_length="1000ms", trans_bandwidth=8.0,
                                        picks=range(12), verbose=False)
         filt = filter.create_filter(filtered, sample_frequency, l_freq, h_freq, verbose=False)
         filtered = filter._overlap_add_filter(filtered, filt, picks=[i for i in range(12)]).T
 
         print(filtered.shape)
-        delay = 1000
+        delay = 100
         print(filtered[:-delay][-800:, :].std(axis=0))
 
         # print(normalized_data[-1:, :])
@@ -121,6 +122,18 @@ async def infer(request):
          at the start&end of the signal, so head and tail must be cut
         2. A overlong segment is needed to have a good filtered result
         '''
+
+        '''
+        20230615
+        The problem still remains, by changing the trans_bandwidth & filter_length the lag have been
+        greatly reduced but still remains (delay can be set to 0 but will the quality of the filtered
+        data will be worsen)
+        Things that affect filtered data quality:
+            change the filtered_slice length (longer is better)
+            change the filter_length&trans_bandwidth in notch_filter parameters
+            padding
+        '''
+
         prediction = model.predict(normalized_data)  # (samples, channels)
 
         filtered_pred = []
@@ -128,7 +141,6 @@ async def infer(request):
             kfs[i].predict()
             kfs[i].update(prediction[0][i])
             filtered_pred.append(kfs[i].x[0])
-
 
         print(prediction)
         print([filtered_pred])
