@@ -11,8 +11,8 @@ from utils import DotTimer
 # from utils import EegoDriver
 
 log = logging.getLogger(__name__)
-
 board = EegoDriver(sampling_rate=2000)
+EMGModel = model.EMGModel(board)
 dt = DotTimer()
 
 
@@ -23,9 +23,7 @@ async def recognition_handler(request):
     log.info(f"requesting model {model_id}")
 
     await ws_current.send_json({'action': 'connect', 'id': model_id})
-    await ws_current.send_json({'action': 'connect', 'id': model_id})
     await asyncio.gather(close_ws(ws_current), recognition(ws_current, model_id))
-
     return ws_current
 
 
@@ -45,7 +43,6 @@ async def close_ws(ws_current):
 async def recognition(ws_current, model_id):
     try:
         while not ws_current.closed:
-            EMGModel = model.EMGModel(board)
             prediction = EMGModel.infer()
 
             '''
@@ -86,7 +83,7 @@ async def init_app():
 
     app.add_routes([
         web.get('/infer/{id}', recognition_handler),
-        web.get('/calibration', calibration)
+        # web.get('/calibration', calibration) TODO
     ])
 
     # TODO

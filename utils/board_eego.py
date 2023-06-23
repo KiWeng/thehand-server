@@ -151,6 +151,7 @@ class EegoDriver:
 
         return self.eeg_data_buffer[-size:, :], self.bip_data_buffer[-size:, :]
 
+
 if __name__ == "__main__":
     dri = EegoDriver()
 
