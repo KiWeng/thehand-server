@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 
 
@@ -9,7 +8,7 @@ class EMGModel:
     def predict(self, data):
         return self.model.predict(data)
 
-
-if __name__ == "__main__":
-    new_model = EMGModel()
-    new_model.model.summary()
+    def calibrate(self, calibrat_ds, new_model_path):
+        self.model.fit(calibrat_ds, epochs=5)
+        self.model.save(new_model_path)
+        return new_model_path

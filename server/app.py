@@ -1,16 +1,15 @@
 import asyncio
 import logging
 import time
-import warnings
 
 import aiohttp
 import numpy as np
 from aiohttp import web
-from mne import filter
 
 from fake import EegoDriver
-from model.infer import EMGModel
-from utils import DotTimer
+from model.model import EMGModel
+from utils import DotTimer, KalmanFilter, filter_data, make_calibration_ds
+from utils.record import record
 
 # from utils import EegoDriver
 
@@ -20,9 +19,7 @@ board = EegoDriver(sampling_rate=2000)
 model = EMGModel()
 dt = DotTimer()
 
-# supress DeprecationWarning caused by mne filtering function
-warnings.filterwarnings(action='ignore', category=DeprecationWarning)
-
+# TODO this can be after calibration
 stds = [
     0.000034,
     0.000019,
@@ -37,44 +34,6 @@ stds = [
     0.000051,
     0.000047,
 ]  # std value exclude extreme is 0.00003
-
-sample_frequency = 2000
-freqs = (50.0, 100.0, 150.0, 200.0, 250, 300, 350, 400, 450, 500, 550, 600)
-l_freq, h_freq = 8, 500
-
-
-# begin of kalman
-class KalmanFilter:
-    def __init__(self, F, H, Q, R, P, x):
-        """
-        F: 状态转移矩阵
-        H: 观测矩阵
-        Q: 状态噪声协方差矩阵
-        R: 观测噪声协方差矩阵
-        P: 初始状态协方差矩阵
-        x: 初始状态向量
-        """
-        self.F = F
-        self.H = H
-        self.Q = Q
-        self.R = R
-        self.P = P
-        self.x = x
-
-    def predict(self):
-        # 预测步骤
-        self.x = np.dot(self.F, self.x)
-        self.P = np.dot(np.dot(self.F, self.P), self.F.T) + self.Q
-
-    def update(self, z):
-        # 更新步骤
-        y = z - np.dot(self.H, self.x)
-        S = np.dot(np.dot(self.H, self.P), self.H.T) + self.R
-        K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))
-
-        self.x = self.x + np.dot(K, y)
-        self.P = np.dot(np.eye(len(self.x)) - np.dot(K, self.H), self.P)
-
 
 # 定义观测矩阵和状态转移矩阵
 H = np.array([[1]])
@@ -92,17 +51,6 @@ R = np.array([[1]])
 kfs = [KalmanFilter(F=F, H=H, Q=Q, R=R, P=P, x=x) for i in range(5)]
 
 
-async def recognition_handler(request):
-    model_id = request.match_info['id']
-    ws_current = web.WebSocketResponse()
-    await ws_current.prepare(request)
-    log.info(f"requesting model {model_id}")
-    await ws_current.send_json({'action': 'connect', 'id': model_id})
-    await asyncio.gather(close_ws(ws_current), recognition(ws_current, model_id))
-
-    return ws_current
-
-
 async def close_ws(ws_current):
     async for msg in ws_current:
         if msg.type == aiohttp.WSMsgType.TEXT:
@@ -116,6 +64,16 @@ async def close_ws(ws_current):
                   ws_current.exception())
 
 
+async def recognition_handler(request):
+    model_id = request.match_info['id']
+    ws_current = web.WebSocketResponse()
+    await ws_current.prepare(request)
+    log.info(f"requesting model {model_id}")
+    await ws_current.send_json({'action': 'connect', 'id': model_id})
+    await asyncio.gather(close_ws(ws_current), recognition(ws_current, model_id))
+    return ws_current
+
+
 async def recognition(ws_current, model_id):
     sample_len = 2000
 
@@ -127,17 +85,8 @@ async def recognition(ws_current, model_id):
                 time.sleep(0.2)
                 data = board.get_data_of_size(sample_len)
                 bipolar_data = data[1]
-
-            filtered = filter.notch_filter((bipolar_data[:, :12] / stds).T, sample_frequency,
-                                           freqs, filter_length="1000ms", trans_bandwidth=8.0,
-                                           picks=range(12), verbose=False)
-            filt = filter.create_filter(filtered, sample_frequency, l_freq, h_freq,
-                                        verbose=False)
-            filtered = filter._overlap_add_filter(filtered, filt,
-                                                  picks=[i for i in range(12)]).T
-
+            filtered = filter_data((bipolar_data[:, :12] / stds).T)
             delay = 100
-
             normalized_data = np.expand_dims(filtered[:-delay][-800:, :], axis=0)
             '''
             TODO: There are some problems:
@@ -176,7 +125,24 @@ async def recognition(ws_current, model_id):
         return
 
 
-async def recording(request):  # TODO
+async def calibration_handler(request):
+    model_id = request.match_info['id']
+    ws_current = web.WebSocketResponse()
+    await ws_current.prepare(request)
+    log.info(f"requesting model {model_id}")
+    await ws_current.send_json({'action': 'connect', 'id': model_id})
+    await asyncio.gather(close_ws(ws_current), calibration(ws_current, model_id))
+    return ws_current
+
+
+async def calibration(request):  # TODO
+    bipolar_data = record(board, 30)[:, :12]  # TODO
+    stds = bipolar_data.std(axis=0)
+
+    filtered_data = filter_data(bipolar_data)
+    ds = make_calibration_ds(filtered_data)
+    model.calibrate(ds, )  # TODO
+
     ws_current = web.WebSocketResponse()
     await ws_current.prepare(request)
     log.info(f"requesting model ")
@@ -195,6 +161,10 @@ async def recording(request):  # TODO
     return ws_current
 
 
+def model_id():
+    return 0
+
+
 async def init_app():
     app = web.Application()
 
@@ -203,7 +173,8 @@ async def init_app():
 
     app.add_routes([
         web.get('/infer/{id}', recognition_handler),
-        web.get('/', recording)
+        web.get('/model/{id}', model_id)
+        # web.get('/', recording)
     ])
 
     # TODO

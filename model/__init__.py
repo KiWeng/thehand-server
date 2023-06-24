@@ -1,1 +1,1 @@
-from .infer import EMGModel
+from .model import EMGModel
