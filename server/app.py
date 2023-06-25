@@ -16,7 +16,7 @@ from utils.record import record
 log = logging.getLogger(__name__)
 
 board = EegoDriver(sampling_rate=2000)
-model = EMGModel()
+model = EMGModel("../assets/saved_model/tmp")
 dt = DotTimer()
 
 # TODO this can be after calibration
@@ -87,7 +87,7 @@ async def recognition(ws_current, model_id):
                 bipolar_data = data[1]
             filtered = filter_data((bipolar_data[:, :12] / stds).T)
             delay = 100
-            normalized_data = np.expand_dims(filtered[:-delay][-800:, :], axis=0)
+            normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
             '''
             TODO: There are some problems:
             1. Some times some channels are sinusoidal so it will create large spikes
@@ -125,44 +125,35 @@ async def recognition(ws_current, model_id):
         return
 
 
-async def calibration_handler(request):
-    model_id = request.match_info['id']
-    ws_current = web.WebSocketResponse()
-    await ws_current.prepare(request)
-    log.info(f"requesting model {model_id}")
-    await ws_current.send_json({'action': 'connect', 'id': model_id})
-    await asyncio.gather(close_ws(ws_current), calibration(ws_current, model_id))
-    return ws_current
+def calibration(duration=30, model_dst="../assets/saved_model/tmp"):  # TODO
+    print("record started")
+    bipolar_data = record(board, duration)[:, :12]  # TODO
+    current_stds = bipolar_data.std(axis=0)
 
-
-async def calibration(request):  # TODO
-    bipolar_data = record(board, 30)[:, :12]  # TODO
-    stds = bipolar_data.std(axis=0)
-
-    filtered_data = filter_data(bipolar_data)
+    filtered_data = filter_data((bipolar_data / current_stds).T).T
     ds = make_calibration_ds(filtered_data)
-    model.calibrate(ds, )  # TODO
-
-    ws_current = web.WebSocketResponse()
-    await ws_current.prepare(request)
-    log.info(f"requesting model ")
-
-    await ws_current.send_json({'action': 'connect', 'id': ' model_id'})
-
-    # try:
-    while not ws_current.closed:
-        await asyncio.sleep(1)
-        await ws_current.send_json(
-            {'action': 'sent', 'id': ' model_id'}
-        )
-    # except OSError:
-    #     log.info(f"stop inferring model ")
-
-    return ws_current
+    model.calibrate(ds, model_dst)
+    return current_stds
 
 
-def model_id():
-    return 0
+async def calibration_handler(request):
+    data = await request.post()
+    """
+    This maybe not the most elegant way to collect data, it can be improved by:
+    - Use web requests to start/stop the data collection process
+    - Use websocket
+    """
+    duration = int(data['duration'])
+    stds = await asyncio.to_thread(calibration, duration)
+    return web.json_response({
+        'response': 'ok'
+    })
+
+
+async def model_id():
+    return web.json_response({
+        'response': 'ok'
+    })
 
 
 async def init_app():
@@ -173,8 +164,8 @@ async def init_app():
 
     app.add_routes([
         web.get('/infer/{id}', recognition_handler),
-        web.get('/model/{id}', model_id)
-        # web.get('/', recording)
+        web.get('/model/{id}', model_id),
+        web.post('/calibration/start', calibration_handler),
     ])
 
     # TODO

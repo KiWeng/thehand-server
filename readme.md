@@ -1,24 +1,28 @@
 # thehand-server
 
-Server side for the hand project, communicate with the web UI using websockets and web requests.
+The server-side for the hand project that communicates with the web UI using websockets and web
+requests.
 
-Manually install timeflux_eego is needed. Installation requires PyBind11&msvc
+To use this project, the `timeflux_eego` package needs to be manually installed. Please ensure that
+you have also installed `PyBind11` and `msvc` before proceeding with the installation.
 
 ## TODOs
 
 ### Basics
 
-- [ ] Connecting with the amplifier
+- [ ] Connect to the amplifier.
 
 ### Calibration session
 
-- [ ] Get start&end request from web ui
-- [ ] Preprocessing data
-- [ ] Train the model
+- [ ] Receive start and end requests from the web UI.
+- [ ] Preprocess data.
+- [ ] Finetune the model.
 
 ### Prediction session
 
-- [ ] Get prediction start request from web ui
-- [ ] Transmitting predicted data@50Hz with websocket
+- [ ] Receive prediction start request from the web UI.
+- [ ] Transmit predicted data at 50Hz using websockets.
 
 ### Miscellaneous
+
+- [ ] Improve the mock module.
