@@ -1,8 +1,11 @@
 import asyncio
+import json
 import logging
+import os
 import time
 
 import aiohttp
+import aiohttp_cors
 import numpy as np
 from aiohttp import web
 
@@ -145,15 +148,19 @@ async def calibration_handler(request):
     """
     duration = int(data['duration'])
     stds = await asyncio.to_thread(calibration, duration)
+    """
+    TODO:
+    The client will have to wait a long time to get a result, this may be a problem
+    """
     return web.json_response({
         'response': 'ok'
     })
 
 
-async def model_id():
-    return web.json_response({
-        'response': 'ok'
-    })
+async def list_models(request):
+    model_list = os.listdir("../assets/saved_model/")
+    response_data = {'models': model_list}
+    return web.Response(text=json.dumps(response_data), status=200, content_type='application/json')
 
 
 async def init_app():
@@ -162,11 +169,22 @@ async def init_app():
     app['websockets'] = {}
     app.on_shutdown.append(shutdown)
 
+    cors = aiohttp_cors.setup(app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*"
+        )
+    })
+
     app.add_routes([
         web.get('/infer/{id}', recognition_handler),
-        web.get('/model/{id}', model_id),
+        web.get('/models/', list_models),
         web.post('/calibration/start', calibration_handler),
     ])
+
+    for route in list(app.router.routes()):
+        cors.add(route)
 
     # TODO
 
