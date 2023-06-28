@@ -3,19 +3,25 @@ import time
 import numpy as np
 
 
-def record(board, duration, channels=[i for i in range(12)]):
+def record(board, duration, channels=None):
     """
     :param board:
     :param duration: int: seconds
     :param channels:
     :return: [duration * sampling_rate, channels]
     """
+    if channels is None:
+        channels = [i for i in range(12)]
+    last_record_time = 0
     bipolar_data_all = None
     board.get_data()  # drop previous data
     for i in range(duration):
         time.sleep(1)
         data = board.get_data()
-        print(data[1].shape)
+        last_record_time = time.time()
+
+        # print(f'record i {i}')
+
         if data is None:
             time.sleep(1)
         elif bipolar_data_all is None:
@@ -25,4 +31,4 @@ def record(board, duration, channels=[i for i in range(12)]):
             bipolar_data = data[1]
             bipolar_data_all = np.concatenate((bipolar_data_all, bipolar_data), axis=0)
 
-    return bipolar_data_all
+    return bipolar_data_all, last_record_time

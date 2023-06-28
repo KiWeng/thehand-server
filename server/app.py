@@ -67,6 +67,22 @@ async def close_ws(ws_current):
                   ws_current.exception())
 
 
+async def handle_message(ws_current):
+    start_time, stop_time = 0, 0
+    async for msg in ws_current:
+        if msg.type == aiohttp.WSMsgType.TEXT:
+            data = json.loads(msg.data)
+            if data['type'] == 'start':
+                start_time = int(data['start_time'])
+            if data['type'] == 'stop':
+                stop_time = int(data['stop_time'])
+                return start_time, stop_time
+        elif msg.type == aiohttp.WSMsgType.ERROR:
+            print('ws connection closed with exception %s' %
+                  ws_current.exception())
+    return start_time, stop_time
+
+
 async def recognition_handler(request):
     model_id = request.match_info['id']
     ws_current = web.WebSocketResponse()
@@ -128,33 +144,59 @@ async def recognition(ws_current, model_id):
         return
 
 
-def calibration(duration=30, model_dst="../assets/saved_model/tmp"):  # TODO
-    print("record started")
-    bipolar_data = record(board, duration)[:, :12]  # TODO
+async def preprocess_data(ws_current, duration=30):  # TODO
+    await asyncio.sleep(0)
+    await ws_current.send_json(
+        {'action': "start recording"}
+    )
+
+    bipolar_data, last_record_time = record(board, duration)  # TODO
+    # print(bipolar_data.shape)
+    bipolar_data = bipolar_data[:, :12]
     current_stds = bipolar_data.std(axis=0)
 
     filtered_data = filter_data((bipolar_data / current_stds).T).T
+    await asyncio.sleep(0)
+    await ws_current.send_json(
+        {'action': "start calibration"}
+    )
+    return filtered_data, current_stds, last_record_time
+
+
+async def calibrate(ws_current, filtered_data, stop_time, last_record_time,
+                    model_dst="../assets/saved_model/tmp"):
+    # TODO
     ds = make_calibration_ds(filtered_data)
     model.calibrate(ds, model_dst)
-    return current_stds
+
+    await asyncio.sleep(0)
+    await ws_current.send_json(
+        {'action': "calibration finished"}
+    )
 
 
 async def calibration_handler(request):
-    data = await request.post()
+    model_id = request.match_info['id']
+    ws_current = web.WebSocketResponse()
+    await ws_current.prepare(request)
+    await ws_current.send_json({'action': 'connected', 'id': model_id})
     """
     This maybe not the most elegant way to collect data, it can be improved by:
     - Use web requests to start/stop the data collection process
     - Use websocket
     """
-    duration = int(data['duration'])
-    stds = await asyncio.to_thread(calibration, duration)
     """
     TODO:
     The client will have to wait a long time to get a result, this may be a problem
     """
-    return web.json_response({
-        'response': 'ok'
-    })
+    results = await asyncio.gather(handle_message(ws_current), preprocess_data(ws_current, 30))
+    start_time, stop_time = results[0]
+    filtered_data, stds, last_record_time = results[1]
+    # print(results)
+    await asyncio.gather(close_ws(ws_current),
+                         calibrate(ws_current, filtered_data, stop_time, last_record_time))
+
+    return ws_current
 
 
 async def list_models(request):
@@ -180,7 +222,7 @@ async def init_app():
     app.add_routes([
         web.get('/infer/{id}', recognition_handler),
         web.get('/models/', list_models),
-        web.post('/calibration/start', calibration_handler),
+        web.get('/calibration/{id}', calibration_handler),
     ])
 
     for route in list(app.router.routes()):
