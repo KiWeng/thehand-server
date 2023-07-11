@@ -123,6 +123,7 @@ async def recognition(ws_current, model_id):
                 change the filter_length&trans_bandwidth in notch_filter parameters
                 padding
             '''
+            model.reload_model(f"../assets/saved_model/{model_id}")
             prediction = model.predict(normalized_data)  # (samples, channels)
             filtered_pred = []
             for i in range(len(prediction[0])):
@@ -163,10 +164,10 @@ async def preprocess_data(ws_current, duration=30):  # TODO
     return filtered_data, current_stds, last_record_time
 
 
-async def calibrate(ws_current, filtered_data, stop_time, last_record_time,
+async def calibrate(ws_current, filtered_data, gestures, stop_time, last_record_time,
                     model_dst="../assets/saved_model/tmp"):
     # TODO
-    ds = make_calibration_ds(filtered_data)
+    ds = make_calibration_ds(filtered_data, gestures)
     model.calibrate(ds, model_dst)
 
     await asyncio.sleep(0)
@@ -189,12 +190,26 @@ async def calibration_handler(request):
     TODO:
     The client will have to wait a long time to get a result, this may be a problem
     """
-    results = await asyncio.gather(handle_message(ws_current), preprocess_data(ws_current, 30))
+
+    # TODO: this should be acquired from the client
+    gestures = [
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
+        [16, 0, 0, 16, 16]
+    ]
+
+    results = await asyncio.gather(handle_message(ws_current),
+                                   preprocess_data(ws_current, len(gestures) * 5))
     start_time, stop_time = results[0]
     filtered_data, stds, last_record_time = results[1]
     # print(results)
     await asyncio.gather(close_ws(ws_current),
-                         calibrate(ws_current, filtered_data, stop_time, last_record_time))
+                         calibrate(ws_current, filtered_data, gestures, stop_time,
+                                   last_record_time))
 
     return ws_current
 

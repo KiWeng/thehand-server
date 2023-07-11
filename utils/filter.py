@@ -29,7 +29,7 @@ def filter_data(data, sample_frequency=2000, l_freq=8, h_freq=500,
 
 
 # TODO: test this
-def make_calibration_ds(filtered_data, batch_size=32):
+def make_calibration_ds(filtered_data, gestures, batch_size=32):
     dataset_all: Optional[tf.data.Dataset] = None
 
     input_dataset = keras.utils.timeseries_dataset_from_array(
@@ -44,16 +44,8 @@ def make_calibration_ds(filtered_data, batch_size=32):
             --------/          \
         when calibrating the model, 2s of idle and 2s of gesture will be used
     """
-    gestures = [
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16]
-    ]
 
-    for i in range(6):
+    for i in range(len(gestures)):
         # TODO
         idle_input_ds = input_dataset.skip(i * 500).take(200)
         active_input_ds = input_dataset.skip(i * 500 + 250).take(200)

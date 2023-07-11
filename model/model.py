@@ -3,7 +3,17 @@ import tensorflow as tf
 
 class EMGModel:
     def __init__(self, model_path='../assets/saved_model/finetuned'):
-        self.model = tf.keras.models.load_model(model_path)
+        self.current_model_path = None
+        self.model = None
+        self.reload_model(model_path)
+
+    def reload_model(self, model_path):
+        if model_path == self.current_model_path:
+            return
+        else:
+            self.current_model_path = model_path
+            self.model = tf.keras.models.load_model(model_path)
+            print(f'Loading model from {model_path}')
 
     def predict(self, data):
         return self.model.predict(data)
