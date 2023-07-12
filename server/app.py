@@ -9,12 +9,11 @@ import aiohttp_cors
 import numpy as np
 from aiohttp import web
 
-from fake import EegoDriver
+# from fake import EegoDriver
 from model.model import EMGModel
 from utils import DotTimer, KalmanFilter, filter_data, make_calibration_ds
+from utils import EegoDriver
 from utils.record import record
-
-# from utils import EegoDriver
 
 log = logging.getLogger(__name__)
 
@@ -72,10 +71,9 @@ async def handle_message(ws_current):
     async for msg in ws_current:
         if msg.type == aiohttp.WSMsgType.TEXT:
             data = json.loads(msg.data)
-            if data['type'] == 'start':
-                start_time = int(data['start_time'])
             if data['type'] == 'stop':
                 stop_time = int(data['stop_time'])
+                start_time = int(data['start_time'])
                 return start_time, stop_time
         elif msg.type == aiohttp.WSMsgType.ERROR:
             print('ws connection closed with exception %s' %
@@ -105,6 +103,9 @@ async def recognition(ws_current, model_id):
                 data = board.get_data_of_size(sample_len)
                 bipolar_data = data[1]
             filtered = filter_data((bipolar_data[:, :12] / stds).T)
+
+            print(stds)
+
             delay = 100
             normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
             '''
@@ -152,6 +153,8 @@ async def preprocess_data(ws_current, duration=30):  # TODO
     )
 
     bipolar_data, last_record_time = record(board, duration)  # TODO
+    np.savetxt(f"../tmp/calibration_record_{time.time()}.csv", bipolar_data, delimiter=",")
+
     # print(bipolar_data.shape)
     bipolar_data = bipolar_data[:, :12]
     current_stds = bipolar_data.std(axis=0)
@@ -199,13 +202,66 @@ async def calibration_handler(request):
         [0, 0, 0, 16, 0],
         [0, 0, 0, 0, 16],
         [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16]
+        [16, 0, 0, 16, 16],
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
+        [16, 0, 0, 16, 16],
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
+        [16, 0, 0, 16, 16],
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
+        [16, 0, 0, 16, 16],
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
+        [16, 0, 0, 16, 16],
     ]
 
     results = await asyncio.gather(handle_message(ws_current),
                                    preprocess_data(ws_current, len(gestures) * 5))
     start_time, stop_time = results[0]
+    global stds
     filtered_data, stds, last_record_time = results[1]
+
+    print(f'new std: {stds}')
+    print(f'client stop time: {stop_time}\nserver stop time: {last_record_time}')
+    # Presumably, server stops later
+    end_time_diff_ms = int(last_record_time * 1000) - int(stop_time)
+    print(f'start time: {start_time}\nstop time: {stop_time}\nend time diff: {end_time_diff_ms}')
+    print(filtered_data.shape)
+
+    fd_shape = filtered_data.shape
+    filtered_data = filtered_data[:fd_shape[0] - end_time_diff_ms * 2, :]
+    fd_shape = filtered_data.shape
+    print(filtered_data.shape)
+
+    print(2 * (stop_time - start_time) - fd_shape[0])
+
+    filtered_data = np.pad(
+        filtered_data,
+        ((2 * (stop_time - start_time) - fd_shape[0], 0), (0, 0)),
+        'mean')
+    print(filtered_data.shape)
+
+    np.savetxt(f"../tmp/calibration_record_{time.time()}_filtered.csv", filtered_data, delimiter=",")
+    np.savetxt(f"../tmp/calibration_record_{time.time()}_stds.csv", stds, delimiter=",")
+
     # print(results)
     await asyncio.gather(close_ws(ws_current),
                          calibrate(ws_current, filtered_data, gestures, stop_time,

@@ -9,7 +9,7 @@ class EegoDriver:
         self.sampling_rate = sampling_rate
         self.data = np.genfromtxt(
             # r"C:\Users\kwzh\PythonProjects\thehand-server\tmp\bipolar_recording_1684500719.653217.csv",
-            r"C:\Users\kwzh\PythonProjects\thehand-server\tmp\bipolar_recording_1684499974.8314939.csv",
+            r"C:\Users\kwzh\PythonProjects\thehand-server\calibration_record_1689067942.9628341_filtered.csv",
             delimiter=" ")
         self.init_time_ns = time.time_ns()
         self.last_pos = 0
