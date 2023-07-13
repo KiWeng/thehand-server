@@ -60,12 +60,18 @@ def make_calibration_ds(filtered_data, gestures, batch_size=32):
         idle_ds = tf.data.Dataset.zip((idle_input_ds, idle_output_ds))
         active_ds = tf.data.Dataset.zip((active_input_ds, active_output_ds))
 
-        if dataset_all is None:
-            dataset_all = idle_ds
-        else:
-            dataset_all = dataset_all.concatenate(idle_ds)
+        # if dataset_all is None:
+        #     dataset_all = idle_ds
+        # else:
+        #     dataset_all = dataset_all.concatenate(idle_ds)
 
-        dataset_all = dataset_all.concatenate(active_ds)
+        # dataset_all = dataset_all.concatenate(active_ds)
+
+        if dataset_all is None:
+            dataset_all = active_ds
+        else:
+            dataset_all = dataset_all.concatenate(active_ds)
+
 
         print(len(dataset_all))
         print(list(dataset_all.skip(200 * i + 199).take(1)))

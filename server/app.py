@@ -210,25 +210,25 @@ async def calibration_handler(request):
     global stds
     filtered_data, stds, last_record_time = results[1]
 
-    print(f'new std: {stds}')
-    print(f'client stop time: {stop_time}\nserver stop time: {last_record_time}')
-    # Presumably, server stops later
-    end_time_diff_ms = int(last_record_time * 1000) - int(stop_time)
-    print(f'start time: {start_time}\nstop time: {stop_time}\nend time diff: {end_time_diff_ms}')
-    print(filtered_data.shape)
-
-    fd_shape = filtered_data.shape
-    filtered_data = filtered_data[:fd_shape[0] - end_time_diff_ms * 2, :]
-    fd_shape = filtered_data.shape
-    print(filtered_data.shape)
-
-    print(2 * (stop_time - start_time) - fd_shape[0])
-
-    filtered_data = np.pad(
-        filtered_data,
-        ((2 * (stop_time - start_time) - fd_shape[0], 0), (0, 0)),
-        'mean')
-    print(filtered_data.shape)
+    # print(f'new std: {stds}')
+    # print(f'client stop time: {stop_time}\nserver stop time: {last_record_time}')
+    # # Presumably, server stops later
+    # end_time_diff_ms = int(last_record_time * 1000) - int(stop_time)
+    # print(f'start time: {start_time}\nstop time: {stop_time}\nend time diff: {end_time_diff_ms}')
+    # print(filtered_data.shape)
+    #
+    # fd_shape = filtered_data.shape
+    # filtered_data = filtered_data[:fd_shape[0] - end_time_diff_ms * 2, :]
+    # fd_shape = filtered_data.shape
+    # print(filtered_data.shape)
+    #
+    # print(2 * (stop_time - start_time) - fd_shape[0])
+    #
+    # filtered_data = np.pad(
+    #     filtered_data,
+    #     ((2 * (stop_time - start_time) - fd_shape[0], 0), (0, 0)),
+    #     'mean')
+    # print(filtered_data.shape)
 
     # print(results)
     new_model_name = "tmp"
