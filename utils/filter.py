@@ -47,33 +47,29 @@ def make_calibration_ds(filtered_data, gestures, batch_size=32):
 
     for i in range(len(gestures)):
         # TODO
-        # idle_input_ds = input_dataset.skip(i * 500 + 100).take(100)
+        idle_input_ds = input_dataset.skip(i * 500 + 100).take(100)
         active_input_ds = input_dataset.skip(i * 500 + 350).take(100)
 
         gesture = gestures[i] if i < len(gestures) else [0, 0, 0, 0, 0]
 
         active_output_ds = keras.utils.timeseries_dataset_from_array(
-            [gesture for _ in range(100)], None, sequence_length=1)
-        # idle_output_ds = keras.utils.timeseries_dataset_from_array(
-        #     [[0, 0, 0, 0, 0] for _ in range(100)], None, sequence_length=1)
+            [gesture for _ in range(100)], None, sequence_length=1, batch_size=1)
+        idle_output_ds = keras.utils.timeseries_dataset_from_array(
+            [[0, 0, 0, 0, 0] for _ in range(100)], None, sequence_length=1, batch_size=1)
 
-        # idle_ds = tf.data.Dataset.zip((idle_input_ds, idle_output_ds))
+        idle_ds = tf.data.Dataset.zip((idle_input_ds, idle_output_ds))
         active_ds = tf.data.Dataset.zip((active_input_ds, active_output_ds))
 
-        # if dataset_all is None:
-        #     dataset_all = idle_ds
-        # else:
-        #     dataset_all.concatenate(idle_ds)
-
         if dataset_all is None:
-            dataset_all = active_ds
+            dataset_all = idle_ds
         else:
-            dataset_all.concatenate(active_ds)
+            dataset_all = dataset_all.concatenate(idle_ds)
 
-        # dataset_all.concatenate(active_ds)
+        dataset_all = dataset_all.concatenate(active_ds)
 
-        print(dataset_all.cardinality().numpy())
+        print(len(dataset_all))
+        print(list(dataset_all.skip(200 * i + 199).take(1)))
 
-        dataset_all.unbatch().batch(batch_size)
+    dataset_all.unbatch().batch(batch_size)
 
     return dataset_all
