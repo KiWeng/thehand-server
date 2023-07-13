@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 board = EegoDriver(sampling_rate=2000)
 model = EMGModel("../assets/saved_model/tmp")
 dt = DotTimer()
+DEBUG = True
 
 # TODO this can be after calibration
 stds = [
@@ -96,6 +97,10 @@ async def recognition(ws_current, model_id):
 
     try:
         while not ws_current.closed:
+            global stds
+            stds = model.reload_model(f"../assets/saved_model/{model_id}")
+            print(stds)
+
             data = board.get_data_of_size(sample_len)
             bipolar_data = data[1]
             while bipolar_data.shape[0] < sample_len:
@@ -103,8 +108,6 @@ async def recognition(ws_current, model_id):
                 data = board.get_data_of_size(sample_len)
                 bipolar_data = data[1]
             filtered = filter_data((bipolar_data[:, :12] / stds).T)
-
-            print(stds)
 
             delay = 100
             normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
@@ -124,7 +127,6 @@ async def recognition(ws_current, model_id):
                 change the filter_length&trans_bandwidth in notch_filter parameters
                 padding
             '''
-            model.reload_model(f"../assets/saved_model/{model_id}")
             prediction = model.predict(normalized_data)  # (samples, channels)
             filtered_pred = []
             for i in range(len(prediction[0])):
@@ -153,9 +155,9 @@ async def preprocess_data(ws_current, duration=30):  # TODO
     )
 
     bipolar_data, last_record_time = record(board, duration)  # TODO
-    np.savetxt(f"../tmp/calibration_record_{time.time()}.csv", bipolar_data, delimiter=",")
+    if DEBUG:
+        np.savetxt(f"../tmp/calibration_record_{time.time()}.csv", bipolar_data, delimiter=",")
 
-    # print(bipolar_data.shape)
     bipolar_data = bipolar_data[:, :12]
     current_stds = bipolar_data.std(axis=0)
 
@@ -203,34 +205,6 @@ async def calibration_handler(request):
         [0, 0, 0, 0, 16],
         [16, 16, 16, 16, 16],
         [16, 0, 0, 16, 16],
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16],
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16],
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16],
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16],
     ]
 
     results = await asyncio.gather(handle_message(ws_current),
@@ -258,14 +232,18 @@ async def calibration_handler(request):
         ((2 * (stop_time - start_time) - fd_shape[0], 0), (0, 0)),
         'mean')
     print(filtered_data.shape)
-
-    np.savetxt(f"../tmp/calibration_record_{time.time()}_filtered.csv", filtered_data, delimiter=",")
-    np.savetxt(f"../tmp/calibration_record_{time.time()}_stds.csv", stds, delimiter=",")
+    if DEBUG:
+        np.savetxt(f"../tmp/calibration_record_{time.time()}_filtered.csv", filtered_data,
+                   delimiter=",")
+        np.savetxt(f"../tmp/calibration_record_{time.time()}_stds.csv", stds, delimiter=",")
 
     # print(results)
+    new_model_name = "tmp"
+    model_dst = f"../assets/saved_model/{new_model_name}"
+    np.savetxt(f"{model_dst}/stds.csv", stds, delimiter=',')
     await asyncio.gather(close_ws(ws_current),
                          calibrate(ws_current, filtered_data, gestures, stop_time,
-                                   last_record_time))
+                                   last_record_time, model_dst=f"{model_dst}"))
 
     return ws_current
 
