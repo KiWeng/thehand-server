@@ -9,10 +9,10 @@ import aiohttp_cors
 import numpy as np
 from aiohttp import web
 
-# from fake import EegoDriver
+from fake import EegoDriver
 from model.model import EMGModel
 from utils import DotTimer, KalmanFilter, filter_data, make_calibration_ds
-from utils import EegoDriver
+# from utils import EegoDriver
 from utils.record import record
 
 log = logging.getLogger(__name__)
@@ -196,24 +196,10 @@ async def calibration_handler(request):
     The client will have to wait a long time to get a result, this may be a problem
     """
 
-    # TODO: this should be acquired from the client
-    gestures = [
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-        [16, 0, 0, 16, 16],
-        [0, 0, 16, 16, 0],
-        [16, 0, 0, 0, 0],
-        [0, 16, 0, 0, 0],
-        [0, 0, 16, 0, 0],
-        [0, 0, 0, 16, 0],
-        [0, 0, 0, 0, 16],
-        [16, 16, 16, 16, 16],
-    ]
-
+    msg = await ws_current.receive()
+    data = json.loads(msg.data)
+    gestures = data['gestures']
+    new_model_name = data['new_model_name']
     results = await asyncio.gather(handle_message(ws_current),
                                    preprocess_data(ws_current, len(gestures) * 5))
     start_time, stop_time = results[0]
@@ -245,9 +231,9 @@ async def calibration_handler(request):
         np.savetxt(f"../tmp/calibration_record_{time.time()}_stds.csv", stds, delimiter=",")
 
     # print(results)
-    new_model_name = "tmp"
     model_dst = f"../assets/saved_model/{new_model_name}"
     np.savetxt(f"{model_dst}/stds.csv", stds, delimiter=',')
+    model.reload_model(f"../assets/saved_model/{model_id}")
     await asyncio.gather(close_ws(ws_current),
                          calibrate(ws_current, filtered_data, gestures, stop_time,
                                    last_record_time, model_dst=f"{model_dst}"))
