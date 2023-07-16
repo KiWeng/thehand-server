@@ -18,7 +18,7 @@ from utils.record import record
 log = logging.getLogger(__name__)
 
 board = EegoDriver(sampling_rate=2000)
-model = EMGModel("../assets/saved_model/tmp")
+model = EMGModel("../assets/saved_model/finetuned")
 dt = DotTimer()
 DEBUG = True
 
@@ -205,6 +205,13 @@ async def calibration_handler(request):
         [0, 0, 0, 0, 16],
         [16, 16, 16, 16, 16],
         [16, 0, 0, 16, 16],
+        [0, 0, 16, 16, 0],
+        [16, 0, 0, 0, 0],
+        [0, 16, 0, 0, 0],
+        [0, 0, 16, 0, 0],
+        [0, 0, 0, 16, 0],
+        [0, 0, 0, 0, 16],
+        [16, 16, 16, 16, 16],
     ]
 
     results = await asyncio.gather(handle_message(ws_current),

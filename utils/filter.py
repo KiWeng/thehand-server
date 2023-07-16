@@ -67,6 +67,6 @@ def make_calibration_ds(filtered_data, gestures, batch_size=32):
 
         dataset_all = dataset_all.concatenate(active_ds)
 
-    dataset_all.unbatch().batch(batch_size)
+    dataset_all = dataset_all.unbatch().batch(batch_size)
 
     return dataset_all
