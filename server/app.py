@@ -127,13 +127,16 @@ async def recognition(ws_current, model_id):
                 change the filter_length&trans_bandwidth in notch_filter parameters
                 padding
             '''
+            print(normalized_data)
             prediction = model.predict(normalized_data)  # (samples, channels)
+            print(prediction)
             filtered_pred = []
             for i in range(len(prediction[0])):
                 kfs[i].predict()
                 kfs[i].update(prediction[0][i])
                 filtered_pred.append(kfs[i].x[0])
             filtered_pred = np.asarray([filtered_pred])
+            print(filtered_pred)
 
             '''
             prediction = await asyncio.to_thread(run_task, params)
@@ -199,6 +202,7 @@ async def calibration_handler(request):
     msg = await ws_current.receive()
     data = json.loads(msg.data)
     gestures = data['gestures']
+    print(gestures)
     new_model_name = data['new_model_name']
     results = await asyncio.gather(handle_message(ws_current),
                                    preprocess_data(ws_current, len(gestures) * 5))
@@ -232,13 +236,60 @@ async def calibration_handler(request):
 
     # print(results)
     model_dst = f"../assets/saved_model/{new_model_name}"
-    np.savetxt(f"{model_dst}/stds.csv", stds, delimiter=',')
     model.reload_model(f"../assets/saved_model/{model_id}")
     await asyncio.gather(close_ws(ws_current),
                          calibrate(ws_current, filtered_data, gestures, stop_time,
                                    last_record_time, model_dst=f"{model_dst}"))
+    np.savetxt(f"{model_dst}/stds.csv", stds, delimiter=',')
+    # np.savetxt(f"{model_dst}ri/stds.csv", stds, delimiter=',')
 
     return ws_current
+
+
+async def test_handler(request):
+    model_id = request.match_info['id']
+
+    with open(f"../tmp/recognition_record_{time.time()}_{model_id}.csv", "w") as f:
+        ws_current = web.WebSocketResponse()
+        await ws_current.prepare(request)
+        log.info(f"requesting model {model_id}")
+        await ws_current.send_json({'action': 'connect', 'id': model_id})
+        await asyncio.gather(close_ws(ws_current), test(ws_current, model_id, f))
+    return ws_current
+
+
+async def test(ws_current, model_id, file):
+    print(file)
+    sample_len = 2000
+    try:
+        while not ws_current.closed:
+            global stds
+            stds = model.reload_model(f"../assets/saved_model/{model_id}")
+            data = board.get_data_of_size(sample_len)
+            bipolar_data = data[1]
+            while bipolar_data.shape[0] < sample_len:
+                time.sleep(0.2)
+                data = board.get_data_of_size(sample_len)
+                bipolar_data = data[1]
+            filtered = filter_data((bipolar_data[:, :12] / stds).T)
+            delay = 100
+            normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
+            prediction = model.predict(normalized_data, verbose=None)  # (samples, channels)
+
+            filtered_pred = []
+            for i in range(len(prediction[0])):
+                kfs[i].predict()
+                kfs[i].update(prediction[0][i])
+                filtered_pred.append(kfs[i].x[0])
+            filtered_pred = np.asarray([filtered_pred])
+
+            ct = time.time_ns()
+            file.write(f"{filtered_pred}, {ct}\n")
+            print(f"{filtered_pred}, {ct}\n")
+
+            await asyncio.sleep(0)
+    finally:
+        return
 
 
 async def list_models(request):
@@ -265,6 +316,7 @@ async def init_app():
         web.get('/infer/{id}', recognition_handler),
         web.get('/models/', list_models),
         web.get('/calibration/{id}', calibration_handler),
+        web.get('/test/{id}', test_handler)
     ])
 
     for route in list(app.router.routes()):

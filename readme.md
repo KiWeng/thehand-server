@@ -10,19 +10,20 @@ you have also installed `PyBind11` and `msvc` before proceeding with the install
 
 ### Basics
 
-- [ ] Connect to the amplifier.
+- [x] Connect to the amplifier.
 
 ### Calibration session
 
-- [ ] Receive start and end requests from the web UI.
-- [ ] Preprocess data.
-- [ ] Finetune the model.
+- [x] Receive start and end requests from the web UI.
+- [x] Preprocess data.
+- [x] Finetune the model.
 
 ### Prediction session
 
-- [ ] Receive prediction start request from the web UI.
-- [ ] Transmit predicted data at 50Hz using websockets.
+- [x] Receive prediction start request from the web UI.
+- [x] Transmit predicted data using websockets.
 
 ### Miscellaneous
 
 - [ ] Improve the mock module.
+- [ ] transmitting realtime emg signals

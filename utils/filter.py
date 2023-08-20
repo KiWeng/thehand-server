@@ -29,7 +29,7 @@ def filter_data(data, sample_frequency=2000, l_freq=8, h_freq=500,
 
 
 # TODO: test this
-def make_calibration_ds(filtered_data, gestures, batch_size=32):
+def make_calibration_ds(filtered_data, gestures, batch_size=64):
     dataset_all: Optional[tf.data.Dataset] = None
 
     input_dataset = keras.utils.timeseries_dataset_from_array(
@@ -60,6 +60,7 @@ def make_calibration_ds(filtered_data, gestures, batch_size=32):
         idle_ds = tf.data.Dataset.zip((idle_input_ds, idle_output_ds))
         active_ds = tf.data.Dataset.zip((active_input_ds, active_output_ds))
 
+# !FIXME: Will too much idle data cause problem? making it a unbalanced data
         if dataset_all is None:
             dataset_all = idle_ds
         else:

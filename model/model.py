@@ -21,10 +21,16 @@ class EMGModel:
             print(f'Loading model from {model_path}')
         return self.stds
 
-    def predict(self, data):
-        return self.model.predict(data)
+    def predict(self, data, verbose=1):
+        return self.model.predict(data, verbose)
 
-    def calibrate(self, calibrat_ds, new_model_path):
-        self.model.fit(calibrat_ds, epochs=5)
+    def calibrate(self, calibrate_ds, new_model_path):
+        self.model.fit(calibrate_ds, epochs=10)
         self.model.save(new_model_path)
+
+        # ri_counterpart = tf.keras.models.load_model(
+        #     filepath='../assets/saved_model/random_inited')
+        # ri_counterpart.fit(calibrate_ds, epochs=10)
+        # ri_counterpart.save(new_model_path + "ri")
+        #
         return new_model_path
