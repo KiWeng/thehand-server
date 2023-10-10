@@ -26,4 +26,7 @@ you have also installed `PyBind11` and `msvc` before proceeding with the install
 ### Miscellaneous
 
 - [ ] Improve the mock module.
-- [ ] transmitting realtime emg signals
+- [ ] Transmitting realtime emg signals
+- [ ] Eliminate hard-coded content, move into config files.
+- [ ] Replace messy `print` with proper logging.
+- [ ] Some of the Arguments should be parsed from command line

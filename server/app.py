@@ -86,7 +86,7 @@ async def recognition_handler(request):
     return ws_current
 
 
-async def recognition(ws_current, model_id):
+async def recognition(ws_current, model_id, file=None):
     sample_len = 3000
     res_arrary = []
 
@@ -154,7 +154,11 @@ async def recognition(ws_current, model_id):
             await ws_current.send_json(
                 {'action': 'sent', 'prediction': filtered_pred.tolist()}
             )
-            dt.dot()
+
+            if file is not None:
+                ct = time.time_ns()
+                file.write(f"{filtered_pred}, {ct}\n")
+
     except Exception as e:
         print(traceback.format_exc())
         if TEST:
@@ -318,47 +322,8 @@ async def test_handler(request):
         await ws_current.prepare(request)
         log.info(f"requesting model {model_id}")
         await ws_current.send_json({'action': 'connect', 'id': model_id})
-        await asyncio.gather(close_ws(ws_current), test(ws_current, model_id, f))
+        await asyncio.gather(close_ws(ws_current), recognition(ws_current, model_id, f))
     return ws_current
-
-
-async def test(ws_current, model_id, file):
-    print(file)
-    sample_len = 2000
-    try:
-        while not ws_current.closed:
-            model.reload_model(f"../assets/saved_model/{model_id}")
-            data = board.get_data_of_size(sample_len)
-            bipolar_data = data[1]
-            quantile = board.get_quantile(0.75)
-            bipolar_quantile = quantile[1][:12]
-            while bipolar_data.shape[0] < sample_len:
-                time.sleep(0.2)
-                data = board.get_data_of_size(sample_len)
-                bipolar_data = data[1]
-                quantile = board.get_quantile(0.75)
-                bipolar_quantile = quantile[1][:12]
-            filtered = filter_data(bipolar_data[:, :12])
-            delay = 500
-            normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
-            normalized_data = normalized_data / bipolar_quantile / 2
-            normalized_data = np.clip(normalized_data, -bound, bound)
-            prediction = model.predict(normalized_data, verbose=None)  # (samples, channels)
-
-            filtered_pred = []
-            for i in range(len(prediction[0])):
-                kfs[i].predict()
-                kfs[i].update(prediction[0][i])
-                filtered_pred.append(kfs[i].x[0])
-            filtered_pred = np.asarray([filtered_pred])
-
-            ct = time.time_ns()
-            file.write(f"{filtered_pred}, {ct}\n")
-            # print(f"{filtered_pred}, {ct}\n")
-
-            await asyncio.sleep(0)
-    finally:
-        return
 
 
 async def list_models(request):
