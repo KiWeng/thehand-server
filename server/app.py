@@ -3,40 +3,34 @@ import json
 import logging
 import os
 import time
+import traceback
+from math import ceil
 
 import aiohttp
 import aiohttp_cors
+import keras.utils
 import numpy as np
 from aiohttp import web
 
-from fake import EegoDriver
 from model.model import EMGModel
 from utils import DotTimer, KalmanFilter, filter_data, make_calibration_ds
-# from utils import EegoDriver
 from utils.record import record
 
 log = logging.getLogger(__name__)
 
-board = EegoDriver(sampling_rate=2000)
-model = EMGModel("../assets/saved_model/finetuned")
+model = EMGModel("../assets/saved_model/finetuned_0914")
 dt = DotTimer()
-DEBUG = True
+bound = 5
+SAVE = False
+FAKE = True
+TEST = True
 
-# TODO this can be after calibration
-stds = [
-    0.000034,
-    0.000019,
-    0.000013,
-    0.300000,
-    0.000012,
-    0.000014,
-    0.000031,
-    0.000028,
-    0.000036,
-    0.000028,
-    0.000051,
-    0.000047,
-]  # std value exclude extreme is 0.00003
+if FAKE:
+    from fake import EegoDriver
+else:
+    from utils import EegoDriver
+
+board = EegoDriver(sampling_rate=2000)
 
 # 定义观测矩阵和状态转移矩阵
 H = np.array([[1]])
@@ -93,13 +87,14 @@ async def recognition_handler(request):
 
 
 async def recognition(ws_current, model_id):
-    sample_len = 2000
+    sample_len = 3000
+    res_arrary = []
 
+    accumulated_len = 0
+    accumulated_quantile = 0
     try:
         while not ws_current.closed:
-            global stds
-            stds = model.reload_model(f"../assets/saved_model/{model_id}")
-            print(stds)
+            model.reload_model(f"../assets/saved_model/{model_id}")
 
             data = board.get_data_of_size(sample_len)
             bipolar_data = data[1]
@@ -107,10 +102,21 @@ async def recognition(ws_current, model_id):
                 time.sleep(0.2)
                 data = board.get_data_of_size(sample_len)
                 bipolar_data = data[1]
-            filtered = filter_data((bipolar_data[:, :12] / stds).T)
 
-            delay = 100
-            normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
+            filtered = filter_data(bipolar_data[:, :12].T).T
+
+            current_quantile = np.quantile(filtered, 0.75, axis=0)
+            accumulated_quantile = \
+                (current_quantile * sample_len + accumulated_quantile * accumulated_len) / \
+                (sample_len + accumulated_len)
+            accumulated_len += sample_len
+
+            delay = 200
+
+            normalized_data = np.expand_dims(filtered[:-delay][-800:, :], axis=0)
+            normalized_data = normalized_data / accumulated_quantile / 2
+            normalized_data = np.clip(normalized_data, -bound, bound)
+
             '''
             TODO: There are some problems:
             1. Some times some channels are sinusoidal so it will create large spikes
@@ -127,16 +133,18 @@ async def recognition(ws_current, model_id):
                 change the filter_length&trans_bandwidth in notch_filter parameters
                 padding
             '''
-            print(normalized_data)
             prediction = model.predict(normalized_data)  # (samples, channels)
-            print(prediction)
+
             filtered_pred = []
             for i in range(len(prediction[0])):
                 kfs[i].predict()
                 kfs[i].update(prediction[0][i])
                 filtered_pred.append(kfs[i].x[0])
+
+            if TEST:
+                res_arrary.append([time.time(), *filtered_pred])
+
             filtered_pred = np.asarray([filtered_pred])
-            print(filtered_pred)
 
             '''
             prediction = await asyncio.to_thread(run_task, params)
@@ -147,6 +155,10 @@ async def recognition(ws_current, model_id):
                 {'action': 'sent', 'prediction': filtered_pred.tolist()}
             )
             dt.dot()
+    except Exception as e:
+        print(traceback.format_exc())
+        if TEST:
+            np.savetxt(f"../tmp/recog_res/recog_res_{time.time()}.csv", res_arrary, delimiter=",")
     finally:
         return
 
@@ -158,25 +170,79 @@ async def preprocess_data(ws_current, duration=30):  # TODO
     )
 
     bipolar_data, last_record_time = record(board, duration)  # TODO
-    if DEBUG:
+    if SAVE:
         np.savetxt(f"../tmp/calibration_record_{time.time()}.csv", bipolar_data, delimiter=",")
 
     bipolar_data = bipolar_data[:, :12]
-    current_stds = bipolar_data.std(axis=0)
 
-    filtered_data = filter_data((bipolar_data / current_stds).T).T
+    filtered_data = filter_data(bipolar_data.T).T
     await asyncio.sleep(0)
     await ws_current.send_json(
         {'action': "start calibration"}
     )
-    return filtered_data, current_stds, last_record_time
+    return filtered_data, last_record_time
 
 
-async def calibrate(ws_current, filtered_data, gestures, stop_time, last_record_time,
-                    model_dst="../assets/saved_model/tmp"):
-    # TODO
-    ds = make_calibration_ds(filtered_data, gestures)
-    model.calibrate(ds, model_dst)
+async def calibrate(ws_current, normalized_data, gestures, model_dst="../assets/saved_model/tmp"):
+    normalized_data = normalized_data[:2000 * 6 * 5 * 2]
+    downsampled_data = normalized_data[400:-400:20]
+
+    print(normalized_data.shape)
+    print(np.std(normalized_data, axis=0))
+
+    corr_tgt = []
+    for _ in range(200):
+        corr_tgt.append(0)
+    for _ in range(ceil(len(normalized_data) / 500)):
+        for _ in range(300):
+            corr_tgt.append(0)
+        for _ in range(50):
+            corr_tgt.append(0)
+        for _ in range(100):
+            corr_tgt.append(16)
+        for _ in range(50):
+            corr_tgt.append(0)
+    for _ in range(500):
+        corr_tgt.append(0)
+    corr_tgt = np.array(corr_tgt)
+    print(corr_tgt.shape)
+
+    corr_accu = None
+    for i in range(12):
+        corr = np.correlate(corr_tgt, abs(downsampled_data[:, i]))
+        if corr_accu is None:
+            corr_accu = corr
+        else:
+            corr_len = min(corr_accu.shape[0], corr.shape[0])
+            corr_accu[:corr_len] += corr[:corr_len]
+
+    max_delay = np.argmax(corr_accu)
+    print(max_delay)
+
+    predict_dataset = keras.utils.timeseries_dataset_from_array(normalized_data, None,
+                                                                sequence_length=800,
+                                                                sequence_stride=20,
+                                                                batch_size=64)
+
+    for i in range(5):
+        calibrate_dataset = make_calibration_ds(normalized_data, gestures, 500 - max_delay)
+        model.calibrate(calibrate_dataset, model_dst, epochs=1, save=False)
+        res = model.predict(predict_dataset)
+
+        corr_accu = None
+        for idx in range(5):
+            new_corr = np.correlate(corr_tgt, res[:, idx])
+            print(res[:, idx].shape)
+            if corr_accu is None:
+                corr_accu = new_corr
+            else:
+                new_corr_len = min(corr_accu.shape[0], new_corr.shape[0])
+                corr_accu[:new_corr_len] += new_corr[:new_corr_len]
+        max_delay = np.argmax(corr_accu)
+        print(f"max_delay: {max_delay}")
+
+    input_dataset = make_calibration_ds(normalized_data, gestures, 500 - max_delay)
+    model.calibrate(input_dataset, model_dst, epochs=10, save=True)
 
     await asyncio.sleep(0)
     await ws_current.send_json(
@@ -202,46 +268,44 @@ async def calibration_handler(request):
     msg = await ws_current.receive()
     data = json.loads(msg.data)
     gestures = data['gestures']
-    print(gestures)
     new_model_name = data['new_model_name']
     results = await asyncio.gather(handle_message(ws_current),
                                    preprocess_data(ws_current, len(gestures) * 5))
-    start_time, stop_time = results[0]
-    global stds
-    filtered_data, stds, last_record_time = results[1]
 
-    print(f'new std: {stds}')
-    print(f'client stop time: {stop_time}\nserver stop time: {last_record_time}')
+    start_time, stop_time = results[0]
+    filtered_data, last_record_time = results[1]
+
     # Presumably, server stops later
     end_time_diff_ms = int(last_record_time * 1000) - int(stop_time)
+    print(f'client stop time: {stop_time}\nserver stop time: {last_record_time}')
     print(f'start time: {start_time}\nstop time: {stop_time}\nend time diff: {end_time_diff_ms}')
-    print(filtered_data.shape)
+    print(f'filtered data shape: {filtered_data.shape}')
 
     fd_shape = filtered_data.shape
     filtered_data = filtered_data[:fd_shape[0] - end_time_diff_ms * 2, :]
     fd_shape = filtered_data.shape
-    print(filtered_data.shape)
-
-    print(2 * (stop_time - start_time) - fd_shape[0])
-
     filtered_data = np.pad(
         filtered_data,
         ((2 * (stop_time - start_time) - fd_shape[0], 0), (0, 0)),
         'mean')
-    print(filtered_data.shape)
-    if DEBUG:
+    if SAVE:
         np.savetxt(f"../tmp/calibration_record_{time.time()}_filtered.csv", filtered_data,
                    delimiter=",")
-        np.savetxt(f"../tmp/calibration_record_{time.time()}_stds.csv", stds, delimiter=",")
+    if FAKE:
+        filepath = "../tmp/calibration_record_1691114522.0463204_filtered.csv"
+        # filepath = r"C:\Users\kwzh\PythonProjects\thehand-server\tmp\calibration_record_1691033510.193293_filtered.csv"
+
+        filtered_data = np.loadtxt(filepath, delimiter=',')
+        print(f"loaded shape: {filtered_data.shape}")
+
+    normalized_data = filtered_data / np.quantile(filtered_data, 0.75, axis=0) / 2
+    normalized_data = np.clip(normalized_data, -bound, bound)
 
     # print(results)
     model_dst = f"../assets/saved_model/{new_model_name}"
     model.reload_model(f"../assets/saved_model/{model_id}")
     await asyncio.gather(close_ws(ws_current),
-                         calibrate(ws_current, filtered_data, gestures, stop_time,
-                                   last_record_time, model_dst=f"{model_dst}"))
-    np.savetxt(f"{model_dst}/stds.csv", stds, delimiter=',')
-    # np.savetxt(f"{model_dst}ri/stds.csv", stds, delimiter=',')
+                         calibrate(ws_current, normalized_data, gestures, model_dst=f"{model_dst}"))
 
     return ws_current
 
@@ -263,17 +327,22 @@ async def test(ws_current, model_id, file):
     sample_len = 2000
     try:
         while not ws_current.closed:
-            global stds
-            stds = model.reload_model(f"../assets/saved_model/{model_id}")
+            model.reload_model(f"../assets/saved_model/{model_id}")
             data = board.get_data_of_size(sample_len)
             bipolar_data = data[1]
+            quantile = board.get_quantile(0.75)
+            bipolar_quantile = quantile[1][:12]
             while bipolar_data.shape[0] < sample_len:
                 time.sleep(0.2)
                 data = board.get_data_of_size(sample_len)
                 bipolar_data = data[1]
-            filtered = filter_data((bipolar_data[:, :12] / stds).T)
-            delay = 100
+                quantile = board.get_quantile(0.75)
+                bipolar_quantile = quantile[1][:12]
+            filtered = filter_data(bipolar_data[:, :12])
+            delay = 500
             normalized_data = np.expand_dims(filtered.T[:-delay][-800:, :], axis=0)
+            normalized_data = normalized_data / bipolar_quantile / 2
+            normalized_data = np.clip(normalized_data, -bound, bound)
             prediction = model.predict(normalized_data, verbose=None)  # (samples, channels)
 
             filtered_pred = []
@@ -285,7 +354,7 @@ async def test(ws_current, model_id, file):
 
             ct = time.time_ns()
             file.write(f"{filtered_pred}, {ct}\n")
-            print(f"{filtered_pred}, {ct}\n")
+            # print(f"{filtered_pred}, {ct}\n")
 
             await asyncio.sleep(0)
     finally:

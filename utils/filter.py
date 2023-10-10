@@ -28,8 +28,7 @@ def filter_data(data, sample_frequency=2000, l_freq=8, h_freq=500,
     return filtered
 
 
-# TODO: test this
-def make_calibration_ds(filtered_data, gestures, batch_size=64):
+def make_calibration_ds(filtered_data, gestures, action_start=300, batch_size=64):
     dataset_all: Optional[tf.data.Dataset] = None
 
     input_dataset = keras.utils.timeseries_dataset_from_array(
@@ -46,26 +45,28 @@ def make_calibration_ds(filtered_data, gestures, batch_size=64):
     """
 
     for i in range(len(gestures)):
-        # TODO
-        idle_input_ds = input_dataset.skip(i * 500 + 100).take(100)
-        active_input_ds = input_dataset.skip(i * 500 + 350).take(100)
+        if i * 500 + 400 > len(input_dataset):
+            break
+        width = 100
+        idle_input_ds = input_dataset.skip(i * 500 + action_start - 200).take(width)
+        active_input_ds = input_dataset.skip(i * 500 + action_start + 50).take(width)
 
-        gesture = gestures[i] if i < len(gestures) else [0, 0, 0, 0, 0]
+        gesture = gestures[i]
 
         active_output_ds = keras.utils.timeseries_dataset_from_array(
-            [gesture for _ in range(100)], None, sequence_length=1, batch_size=1)
+            [tf.constant(gesture, dtype=tf.float32) for _ in range(width)], None, sequence_length=1,
+            batch_size=1)
         idle_output_ds = keras.utils.timeseries_dataset_from_array(
-            [[0, 0, 0, 0, 0] for _ in range(100)], None, sequence_length=1, batch_size=1)
+            [tf.constant([0, 0, 0, 0, 0], dtype=tf.float32) for _ in range(width)], None,
+            sequence_length=1, batch_size=1)
 
         idle_ds = tf.data.Dataset.zip((idle_input_ds, idle_output_ds))
         active_ds = tf.data.Dataset.zip((active_input_ds, active_output_ds))
 
-# !FIXME: Will too much idle data cause problem? making it a unbalanced data
         if dataset_all is None:
             dataset_all = idle_ds
         else:
             dataset_all = dataset_all.concatenate(idle_ds)
-
         dataset_all = dataset_all.concatenate(active_ds)
 
     dataset_all = dataset_all.unbatch().batch(batch_size)
